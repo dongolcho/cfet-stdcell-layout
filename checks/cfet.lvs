@@ -118,10 +118,25 @@ schematic.simplify
 align
 
 # simplify removes a circuit without devices, and compare then has nothing to report as different.
-if !netlist.circuit_by_name(source.cell_name)
+layout_circuit = netlist.circuit_by_name(source.cell_name)
+# compare matches the top circuit by its devices and does not require each schematic pin to exist
+# in the layout. A pin text on a shape that reaches no transistor is removed with its floating net,
+# so the layout circuit lacks that pin; list such pins explicitly.
+schematic_circuit = schematic.circuit_by_name(source.cell_name)
+missing_pins = []
+if layout_circuit && schematic_circuit
+  missing_pins = schematic_circuit.each_pin.map(&:name) - layout_circuit.each_pin.map(&:name)
+end
+
+if !layout_circuit
   puts("Error: missing transistors in cell '#{source.cell_name}' of '#{$input}'. LVS did not compare it with the schematic. Draw PO1 gates across FININTENT.")
-elsif compare
-  puts("Info: LVS found the layout of '#{$input}' equal to the schematic '#{schematic_path}'.")
-else
+elsif !compare
   puts("Error: LVS found differences between the layout '#{$input}' and the schematic '#{schematic_path}'. Open #{$report} in KLayout (Tools > Netlist Browser) to see them.")
+elsif !missing_pins.empty?
+  names = missing_pins.map { |name| "'#{name}'" }.join(", ")
+  puts("Error: missing #{missing_pins.size == 1 ? 'pin' : 'pins'} #{names} in cell '#{source.cell_name}' of '#{$input}'. " \
+       "The transistors match the schematic, but no text with #{missing_pins.size == 1 ? 'this name' : 'these names'} sits on a net that reaches them. " \
+       "Place each text on MINTINTENT or M1 (VDD, VSS on MBURINTENT) over the shape that connects to its gate or S/D.")
+else
+  puts("Info: LVS found the layout of '#{$input}' equal to the schematic '#{schematic_path}'.")
 end
