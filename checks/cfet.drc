@@ -1,0 +1,212 @@
+# KLayout DRC deck for the CFET 4T hand-layout rules written in ../cfet_rules.md.
+#
+# Usage:
+#   klayout_app.exe -b -r cfet.drc -rd input=<layout.gds> -rd report=<report.lyrdb> [-rd cell=<top cell>]
+#
+# All rule values are in nm. The deck derives the allowed positions (MINT tracks, gate grid,
+# S/D columns) from the cell's prBoundary, so the cell may sit anywhere in the layout.
+
+source($input, $cell)
+report("CFET 4T DRC (cfet_rules.md)", $report)
+
+if (dbu - 0.001).abs > 1e-9
+  raise "Error: invalid database unit #{dbu} um in '#{$input}'. The rules use whole nm. Save the layout with dbu 0.001 um (technology cfet_sherazi2019)."
+end
+
+# ---- rule values (nm), see cfet_rules.md sections 3 and 5 ----
+CELL_HEIGHT = 84
+CPP = 42
+GATE_WIDTH = 14
+CONTACT_WIDTH = 14
+TRACKS = { "T1" => [68, 79], "T2" => [47, 58], "T3" => [26, 37], "T4" => [5, 16] }
+EDGE_TRACKS = %w[T1 T4]
+CHANNELS = [[29, 34], [50, 55]]
+CHANNEL_SPAN = [26, 58]          # y range that every S/D contact must cover
+CONTACT_Y_LIMITS = [5, 79]       # y range a contact may escape to
+BPR_BANDS = [[-16, 16], [68, 100]]
+MINT_WIDTH = 11
+MINT_TRACK_SPACE = 10
+MINT_END_SPACE = 16
+MINT_MIN_AREA_NM2 = 550
+MINT_TO_CELL_EDGE = 8            # half of MINT_END_SPACE, so abutted cells keep 16 nm
+CONTACT_SPACE = 10
+VIA_WIDTH = 10
+VIA_PASS_SPACE = 10              # Vbot to M0top, VBurTall to M0bot
+
+def to_um(value_nm)
+  value_nm * 0.001
+end
+
+# ---- input layers (cfet.lyp numbering) ----
+bpr        = input(1, 0)
+fin        = input(2, 0)
+gate       = input(10, 0)
+dummy_poly = input(11, 0)
+m0bot      = input(20, 0)
+m0top      = input(21, 0)
+m0merge    = input(22, 0)
+vbur_short = input(30, 0)
+vbur_tall  = input(31, 0)
+vbot       = input(40, 0)
+vtop       = input(41, 0)
+vintga     = input(42, 0)
+mint       = input(50, 0)
+v1         = input(60, 0)
+m1         = input(61, 0)
+boundary   = input(100, 0)
+
+# ---- cell frame from prBoundary ----
+if boundary.is_empty?
+  raise "Error: missing prBoundary (layer 100/0) in '#{$input}'. The deck takes the cell frame from it. Draw the cell outline on prBoundary."
+end
+frame = boundary.data.bbox
+left, bottom = frame.left, frame.bottom
+cell_width, cell_height = frame.width, frame.height
+if cell_height != CELL_HEIGHT || cell_width % CPP != 0
+  raise "Error: invalid prBoundary size #{cell_width} x #{cell_height} nm in '#{$input}'. A 4T cell is #{CELL_HEIGHT} nm high and a whole number of CPP (#{CPP} nm) wide."
+end
+cpp_count = cell_width / CPP
+
+# Builds a polygon layer from boxes given in nm relative to the cell origin.
+def make_band_layer(boxes)
+  layer = polygon_layer
+  boxes.each { |x1, y1, x2, y2| layer.data.insert(RBA::Box::new(x1, y1, x2, y2)) }
+  layer
+end
+
+span_x = [left, left + cell_width]
+track_band = make_band_layer(TRACKS.values.map { |lo, hi| [span_x[0], bottom + lo, span_x[1], bottom + hi] })
+edge_track_band = make_band_layer(EDGE_TRACKS.map { |t| lo, hi = TRACKS[t]; [span_x[0], bottom + lo, span_x[1], bottom + hi] })
+channel_band = make_band_layer(CHANNELS.map { |lo, hi| [span_x[0], bottom + lo, span_x[1], bottom + hi] })
+bpr_band = make_band_layer(BPR_BANDS.map { |lo, hi| [span_x[0], bottom + lo, span_x[1], bottom + hi] })
+inner_gate_columns = make_band_layer((1...cpp_count).map { |k|
+  x = left + k * CPP
+  [x - GATE_WIDTH / 2, bottom, x + GATE_WIDTH / 2, bottom + CELL_HEIGHT]
+})
+edge_gate_columns = make_band_layer([0, cpp_count].map { |k|
+  x = left + k * CPP
+  [x - GATE_WIDTH / 2, bottom, x + GATE_WIDTH / 2, bottom + CELL_HEIGHT]
+})
+sd_columns = make_band_layer((0...cpp_count).map { |k|
+  x = left + k * CPP + CPP / 2
+  [x - CONTACT_WIDTH / 2, bottom + CONTACT_Y_LIMITS[0], x + CONTACT_WIDTH / 2, bottom + CONTACT_Y_LIMITS[1]]
+})
+channel_spans = make_band_layer((0...cpp_count).map { |k|
+  x = left + k * CPP + CPP / 2
+  [x - CONTACT_WIDTH / 2, bottom + CHANNEL_SPAN[0], x + CONTACT_WIDTH / 2, bottom + CHANNEL_SPAN[1]]
+})
+mint_allowed = make_band_layer([[left + MINT_TO_CELL_EDGE, bottom, left + cell_width - MINT_TO_CELL_EDGE, bottom + CELL_HEIGHT]])
+
+# ---- check runner: writes each result to the report and prints one line per rule ----
+$violation_total = 0
+$frame_left, $frame_bottom, $cpp_count = left, bottom, cpp_count
+MAX_LISTED_LOCATIONS = 5
+
+# Names the column under x: "S/D k", "gate k" or a dummy poly, counted from the left.
+def describe_column(x)
+  half_pitch_index = ((x - $frame_left) / (CPP / 2.0)).round
+  center = $frame_left + half_pitch_index * CPP / 2
+  if half_pitch_index.odd?
+    "S/D #{(half_pitch_index + 1) / 2} (x=#{center})"
+  elsif half_pitch_index <= 0
+    "left dummy poly (x=#{center})"
+  elsif half_pitch_index >= 2 * $cpp_count
+    "right dummy poly (x=#{center})"
+  else
+    "gate #{half_pitch_index / 2} (x=#{center})"
+  end
+end
+
+# Names the MINT tracks that the y range [y1, y2] overlaps.
+def describe_tracks(y1, y2)
+  names = TRACKS.select { |_, (lo, hi)| y1 < $frame_bottom + hi && y2 > $frame_bottom + lo }.keys
+  names.empty? ? "between tracks" : names.join("+")
+end
+
+# Prints the coordinates (nm) and position of up to MAX_LISTED_LOCATIONS violations.
+# With shape_layer given, it lists the whole drawn shapes that contain a violation,
+# so the coordinates match what the user sees in the shape's properties.
+def list_locations(result, shape_layer)
+  listed = shape_layer ? shape_layer.interacting(result) : result
+  boxes = []
+  listed.data.each { |item| boxes << item.bbox }
+  boxes.first(MAX_LISTED_LOCATIONS).each do |box|
+    center_x = (box.left + box.right) / 2.0
+    puts("         at x #{box.left}..#{box.right}, y #{box.bottom}..#{box.top} nm: " \
+         "#{describe_column(center_x)}, #{describe_tracks(box.bottom, box.top)}")
+  end
+  puts("         ... #{boxes.size - MAX_LISTED_LOCATIONS} more in the report") if boxes.size > MAX_LISTED_LOCATIONS
+end
+
+def check(result, rule, description, shape_layer = nil)
+  count = result.count
+  result.output(rule, description)
+  $violation_total += count
+  puts("  #{count == 0 ? 'ok  ' : 'FAIL'} #{rule}: #{description}#{count > 0 ? " (#{count})" : ''}")
+  list_locations(result, shape_layer) if count > 0
+end
+
+puts("Info: checking '#{$input}' against cfet_rules.md")
+
+# Frame layers (rules section 3)
+check(bpr - bpr_band, "BPR.POS", "MBURINTENT outside the BPR bands centered on the cell edges (y -16..16, 68..100)", bpr)
+check(fin - channel_band, "FIN.POS", "FININTENT outside the two channel lines (y 29..34, 50..55)", fin)
+check(gate - inner_gate_columns, "PO.GRID", "PO1 off the gate grid (x = k*42 +-7 inside the cell, y 0..84)", gate)
+check(dummy_poly - edge_gate_columns, "PODUMMY.GRID", "POLYDUMMY off the cell-edge poly lines (x = 0 or cell width, +-7)", dummy_poly)
+
+# S/D contacts (rules section 5)
+[[m0bot, "M0BOT"], [m0top, "M0TOP"]].each do |contact, name|
+  check(contact - sd_columns, "#{name}.POS", "#{name == 'M0BOT' ? 'M0bot' : 'M0top'} outside the S/D columns (x = center +-7, y 5..79)", contact)
+  check(contact.width(to_um(CONTACT_WIDTH)), "#{name}.W", "contact narrower than #{CONTACT_WIDTH} nm")
+  check(contact.space(to_um(CONTACT_SPACE)), "#{name}.S", "contacts of the same tier closer than #{CONTACT_SPACE} nm")
+  check(channel_spans.interacting(contact) - contact, "#{name}.CH", "contact does not cover the whole channel span (y 26..58)", contact)
+end
+
+# MINT (rules section 5)
+check(mint - track_band, "MINT.TRK", "MINT off the tracks T1..T4", mint)
+check(mint.width(to_um(MINT_WIDTH)), "MINT.W", "MINT narrower than #{MINT_WIDTH} nm")
+check(mint.space(to_um(MINT_TRACK_SPACE)), "MINT.S", "MINT shapes closer than #{MINT_TRACK_SPACE} nm")
+TRACKS.each do |name, (lo, hi)|
+  on_track = mint & make_band_layer([[span_x[0] - 1000, bottom + lo, span_x[1] + 1000, bottom + hi]])
+  check(on_track.space(to_um(MINT_END_SPACE)), "MINT.EE.#{name}", "MINT line ends on #{name} closer than #{MINT_END_SPACE} nm")
+end
+check(mint.with_area(nil, MINT_MIN_AREA_NM2 * 1e-6), "MINT.A", "MINT segment smaller than #{MINT_MIN_AREA_NM2} nm2 (50 nm long at 11 nm width)")
+check(mint - mint_allowed, "MINT.EDGE", "MINT end closer than #{MINT_TO_CELL_EDGE} nm to the left or right cell edge", mint)
+
+# Vias (rules sections 5 and 6)
+vias = { "VBOT" => vbot, "VTOP" => vtop, "VINTGA" => vintga, "VBURSHORT" => vbur_short, "VBURTALL" => vbur_tall, "V1" => v1 }
+vias.each do |name, via|
+  check(via - track_band, "#{name}.TRK", "via outside the y range of a track", via)
+  check(via.width(to_um(VIA_WIDTH)), "#{name}.W", "via smaller than #{VIA_WIDTH} nm")
+end
+check(vbot - edge_track_band, "VBOT.EDGE", "Vbot on a center track; M0bot can be picked up only at T1 or T4", vbot)
+landings = [
+  [vbot, m0bot, "VBOT.LAND.M0", "Vbot not fully on M0bot"],
+  [vbot, mint, "VBOT.LAND.MINT", "Vbot not fully under MINT"],
+  [vtop, m0top, "VTOP.LAND.M0", "Vtop not fully on M0top"],
+  [vtop, mint, "VTOP.LAND.MINT", "Vtop not fully under MINT"],
+  [vintga, gate, "VINTGA.LAND.PO", "VINTGA not fully on PO1"],
+  [vintga, mint, "VINTGA.LAND.MINT", "VINTGA not fully under MINT"],
+  [vbur_short, m0bot, "VBURSHORT.LAND.M0", "VBurShort not fully under M0bot"],
+  [vbur_short, bpr, "VBURSHORT.LAND.BPR", "VBurShort not fully on BPR"],
+  [vbur_tall, m0top, "VBURTALL.LAND.M0", "VBurTall not fully under M0top"],
+  [vbur_tall, bpr, "VBURTALL.LAND.BPR", "VBurTall not fully on BPR"],
+  [v1, mint, "V1.LAND.MINT", "V1 not fully on MINT"],
+  [v1, m1, "V1.LAND.M1", "V1 not fully under M1"],
+  [m0merge, m0bot, "M0MERGE.LAND.BOT", "M0merge not fully on M0bot"],
+  [m0merge, m0top, "M0MERGE.LAND.TOP", "M0merge not fully on M0top"],
+]
+landings.each { |via, target, rule, description| check(via - target, rule, description, via) }
+
+# Vias that pass the other tier (rules section 6, item 3)
+check((vbot & m0top) + vbot.separation(m0top, to_um(VIA_PASS_SPACE)).polygons, "VBOT.M0TOP",
+      "Vbot closer than #{VIA_PASS_SPACE} nm to M0top (Vbot passes the top-tier contact level)")
+check((vbur_tall & m0bot) + vbur_tall.separation(m0bot, to_um(VIA_PASS_SPACE)).polygons, "VBURTALL.M0BOT",
+      "VBurTall closer than #{VIA_PASS_SPACE} nm to M0bot (VBurTall passes the bottom-tier contact level)")
+check(m0merge & fin, "M0MERGE.CH", "M0merge over a channel line; merge away from the nanosheets", m0merge)
+
+if $violation_total == 0
+  puts("Info: DRC found no violations in '#{$input}'.")
+else
+  puts("Error: DRC found #{$violation_total} #{$violation_total == 1 ? 'violation' : 'violations'} in '#{$input}'. Open #{$report} in KLayout (Tools > Marker Browser) to see where.")
+end

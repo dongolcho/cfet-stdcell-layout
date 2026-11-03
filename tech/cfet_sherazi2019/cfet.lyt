@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<technology>
+ <name>cfet_sherazi2019</name>
+ <description>CFET 4T/3T hand-layout rules (Sherazi et al., SPIE 2019; see cfet_rules.md)</description>
+ <group/>
+ <dbu>0.001</dbu>
+ <layer-properties_file>cfet.lyp</layer-properties_file>
+ <add-other-layers>true</add-other-layers>
+ <default-grids>0.001,0.005,0.021,0.042</default-grids>
+</technology>

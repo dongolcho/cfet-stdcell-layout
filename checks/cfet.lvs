@@ -1,0 +1,93 @@
+# KLayout LVS deck for CFET 4T cells drawn with the cfet.lyp layers.
+#
+# Usage:
+#   klayout_app.exe -b -r cfet.lvs -rd input=<layout.gds> -rd schematic=<netlist.cir> -rd report=<report.lvsdb> [-rd cell=<top cell>]
+#
+# Device model: every gate column holds one pFET in the bottom tier and one nFET in the top tier.
+# Both tiers share the FININTENT and PO1 shapes, so each tier gets its own copy of the channel
+# layers; the bottom copy connects only to M0bot and the top copy only to M0top.
+# Layout pins are texts on MINTINTENT (signals) and on MBURINTENT (VDD, VSS).
+
+source($input, $cell)
+report_lvs($report)
+deep
+
+# Reads SPICE "M" elements (D G S B) as 3-terminal MOS devices; CFET tiers have no body terminal.
+class Mos3SpiceReader < RBA::NetlistSpiceReaderDelegate
+  def element(circuit, element_type, name, model, value, nets, params)
+    if element_type != "M" || nets.size != 4
+      return super
+    end
+    device_class = circuit.netlist.device_class_by_name(model)
+    if !device_class
+      device_class = RBA::DeviceClassMOS3Transistor::new
+      device_class.name = model
+      circuit.netlist.add(device_class)
+    end
+    device = circuit.create_device(device_class, name)
+    device.connect_terminal("D", nets[0])
+    device.connect_terminal("G", nets[1])
+    device.connect_terminal("S", nets[2])
+    # SPICE values are in meters; KLayout MOS parameters are in micrometers.
+    device.set_parameter("L", (params["L"] || 0.0) * 1e6)
+    device.set_parameter("W", (params["W"] || 0.0) * 1e6)
+    true
+  end
+end
+
+bpr        = input(1, 0)
+fin        = input(2, 0)
+gate       = input(10, 0)
+m0bot      = input(20, 0)
+m0top      = input(21, 0)
+m0merge    = input(22, 0)
+vbur_short = input(30, 0)
+vbur_tall  = input(31, 0)
+vbot       = input(40, 0)
+vtop       = input(41, 0)
+vintga     = input(42, 0)
+mint       = input(50, 0)
+v1         = input(60, 0)
+m1         = input(61, 0)
+mint_text  = labels(50, 0)
+bpr_text   = labels(1, 0)
+
+# Separate copies per tier, so that the two tiers are not connected through the shared shapes.
+pfet_channel = fin & gate
+nfet_channel = fin & gate
+pfet_sd = fin - gate
+nfet_sd = fin - gate
+
+extract_devices(mos3("PMOS"), { "SD" => pfet_sd, "G" => pfet_channel, "tS" => pfet_sd, "tD" => pfet_sd, "tG" => gate })
+extract_devices(mos3("NMOS"), { "SD" => nfet_sd, "G" => nfet_channel, "tS" => nfet_sd, "tD" => nfet_sd, "tG" => gate })
+
+connect(pfet_sd, m0bot)
+connect(nfet_sd, m0top)
+connect(m0bot, m0merge)
+connect(m0merge, m0top)
+connect(m0bot, vbot)
+connect(vbot, mint)
+connect(m0top, vtop)
+connect(vtop, mint)
+connect(gate, vintga)
+connect(vintga, mint)
+connect(m0bot, vbur_short)
+connect(vbur_short, bpr)
+connect(m0top, vbur_tall)
+connect(vbur_tall, bpr)
+connect(mint, v1)
+connect(v1, m1)
+connect(mint, mint_text)
+connect(bpr, bpr_text)
+
+schematic($schematic, RBA::NetlistSpiceReader::new(Mos3SpiceReader::new))
+
+netlist.simplify
+schematic.simplify
+align
+
+if compare
+  puts("Info: LVS found the layout of '#{$input}' equal to the schematic '#{$schematic}'.")
+else
+  puts("Error: LVS found differences between the layout '#{$input}' and the schematic '#{$schematic}'. Open #{$report} in KLayout (Tools > Netlist Browser) to see them.")
+end
