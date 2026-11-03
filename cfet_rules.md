@@ -73,7 +73,7 @@ The GDS layer numbers are set by this document (assumed). The layer names follow
 1. `MBURINTENT` (1/0): buried power rail (BPR), the power line buried in the wafer below the devices.
 2. `FININTENT` (2/0): nanosheet channel line. The top and bottom tiers are stacked at the same position, so it is drawn once.
 3. `PO1` (10/0): gate, shared by both tiers.
-4. `POLYDUMMY` (11/0): dummy poly on the left and right cell boundaries.
+4. `POLYDUMMY` (11/0): dummy poly on the left and right cell boundaries, and on any poly line inside the cell where a dummy is inserted (section 7).
 5. `POLYCUT` (12/0): area that cuts the gates at the top and bottom cell boundaries.
 6. `M0bot` (20/0): S/D contact of the bottom tier (pFET).
 7. `M0top` (21/0): S/D contact of the top tier (nFET).
@@ -87,6 +87,7 @@ The GDS layer numbers are set by this document (assumed). The layer names follow
 15. `V1` (60/0): via between MINT and M1. The paper does not name it; this document does.
 16. `M1` (61/0): vertical routing layer.
 17. `prBoundary` (100/0): cell boundary rectangle. The conventional name of the layer that place-and-route tools use as the cell outline.
+18. `GUIDE` (200/0): reference outlines of the tracks, poly lines and S/D columns. Not a process layer; the DRC and LVS decks ignore it.
 
 `FINCUT1`, `NPFET` and `DUMMY` in the Figure 8 legend are left out because no shapes on them could be found in the figure.
 
@@ -189,7 +190,17 @@ The rules in this section set which connections are possible, not dimensions.
 | Channel F1 | 29 | 34 | derived |
 | Channel span of an S/D contact | 26 | 37 | derived |
 
-All other dimensions and connection rules are the same as for 4T. With only one center track for input pins, inputs cannot be staggered. The paper therefore uses a SuperVia (Figure 9) or adds a dummy poly (Figure 10).
+| Gate and dummy poly | 0 | 63 | derived |
+| `POLYCUT`, South | -5 | 5 | assumed |
+| `POLYCUT`, North | 58 | 68 | assumed |
+| S/D contact escape limits | 5 | 58 | derived |
+
+All other dimensions and connection rules are the same as for 4T, with T3 in place of T4 as the South edge track: `Vbot` sits on T1 or T3, and `VBurTall` for VSS at the T3 position. With only one center track for input pins, inputs cannot be staggered. The paper therefore uses a SuperVia (Figure 9) or adds a dummy poly (Figure 10).
+
+- **Why 4 CPP does not fit (derived from section 5):** the three inputs of AOI21D1 must all sit on T2, over gates 42 nm apart. With a 50 nm minimum segment length and 16 nm line-end spacing, the middle input leaves no room for the third: B at x 8–58 pushes A1 to 74–124, and A2 would have to start at 140 but must cover its gate at 121–131. Segments short enough to fit (26 nm) violate the minimum area.
+- **Why 5 CPP fits:** one inserted dummy poly gives one more CPP of track length, for example B 15–65, A1 81–131, A2 147–197 on T2.
+- **Dummy poly inside the cell:** a `POLYDUMMY` line may sit on any poly-grid position. The LVS deck treats only `PO1` as a gate, so a channel that runs on under a dummy joins the S/D regions on both sides into one net in each tier.
+- **Diffusion break:** to keep the two sides apart, cut `FININTENT` under the dummy (for a dummy at x = 84, leave out x 77–91). Without the cut, both sides must be the same net in each tier. A CFET dummy gate cannot turn off both tiers at once, because tying it to VDD turns the nFET on and tying it to VSS turns the pFET on (inferred).
 
 ## 8. Changing assumed values and open decisions
 
@@ -200,10 +211,7 @@ Changing an assumed value changes other values with it:
   - minimum length (minimum area ÷ 11) > 42 − line-end spacing
   - minimum length ≤ about 66 nm, and line-end spacing ≤ 18 nm
 
-Two decisions remain:
+The rules of this document are checked by the KLayout DRC deck `checks/cfet.drc`. One decision remains:
 
-1. **Whether to move these rules into a KLayout DRC deck.**
-   - A DRC deck is a check script that KLayout runs to mark rule violations in a layout.
-   - Recommendation: check the first few cells by hand against this document, and build the deck once the cell count grows. The rule count is still small enough to check by hand.
-2. **Whether to obtain reference [5] to confirm the actual MINT minimum area.**
+1. **Whether to obtain reference [5] to confirm the actual MINT minimum area.**
    - Recommendation: confirm it if you want to follow the reasoning of Figures 8 and 9 in numbers. The current value is an assumption fitted to the paper's claims.
