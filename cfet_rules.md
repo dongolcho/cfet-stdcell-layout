@@ -86,8 +86,9 @@ The GDS layer numbers are set by this document (assumed). The layer names follow
 14. `MINTINTENT` (50/0): MINT, the first horizontal routing layer. Input and output pin names (A1, ZN, ...) are placed on this layer as text.
 15. `V1` (60/0): via between MINT and M1. The paper does not name it; this document does.
 16. `M1` (61/0): vertical routing layer.
-17. `prBoundary` (100/0): cell boundary rectangle. The conventional name of the layer that place-and-route tools use as the cell outline.
-18. `GUIDE` (200/0): reference outlines of the tracks, poly lines and S/D columns. Not a process layer; the DRC and LVS decks ignore it.
+17. `SuperVia` (62/0): via from M1 straight down to the gate, passing the MINT level (paper Figure 9). The name is the paper's; the layer number is this document's.
+18. `prBoundary` (100/0): cell boundary rectangle. The conventional name of the layer that place-and-route tools use as the cell outline.
+19. `GUIDE` (200/0): reference outlines of the tracks, poly lines and S/D columns. Not a process layer; the DRC and LVS decks ignore it.
 
 `FINCUT1`, `NPFET` and `DUMMY` in the Figure 8 legend are left out because no shapes on them could be found in the figure.
 
@@ -155,10 +156,24 @@ The GDS layer numbers are set by this document (assumed). The layer names follow
 | Rule | Value | Basis |
 |---|---:|---|
 | Pitch (nm) | 42 | paper text |
-| Width (nm) | 21 | assumed |
+| Width (nm) | 20 | assumed |
 
 - **Pitch:** as the paper's Figure 10 explanation says, M1 is placed over the S/D columns (x = 21, 63, ...) with a 1:1 gear ratio to CPP. The gear ratio is the ratio of the pitches of two layers.
+- **Width 20 nm:** close to half the pitch, and even, so that an M1 line centered on an S/D column or a gate has integer edges (center ±10).
+- **Over a gate:** a cell that uses a SuperVia needs an M1 line over that gate (x = k × 42) instead. The paper names the cost: M1 must either be aligned over the gates or run at half the CPP pitch (1:2 gear ratio) (paper text, Figure 9).
 - **Need:** the 4T AOI21D1 does not need M1. In the paper's 4T library only 2 of 55 cells use M1.
+- **Pins:** an input that enters through a SuperVia has its pin on M1, so its pin text goes on `M1`.
+
+### SuperVia (`SuperVia`)
+
+| Rule | Value | Basis |
+|---|---:|---|
+| x size (nm) | 10 | assumed |
+| y size (nm) | 11 | assumed |
+| SuperVia to MINT space (nm) | 10 | assumed |
+
+- **Position:** on a gate (`PO1`), within the y range of a track, fully under M1. It has the same size as the other vias.
+- **Space to MINT:** the SuperVia passes the MINT level without connecting to it, so it keeps 10 nm from MINT, like `Vbot` from `M0top` and `VBurTall` from `M0bot`. A SuperVia on T2 therefore takes the T2 length of a 10 nm via plus 10 nm on each side, instead of a 50 nm pin.
 
 ## 6. Connection rules
 
@@ -199,6 +214,7 @@ All other dimensions and connection rules are the same as for 4T, with T3 in pla
 
 - **Why 4 CPP does not fit (derived from section 5):** the three inputs of AOI21D1 must all sit on T2, over gates 42 nm apart. With a 50 nm minimum segment length and 16 nm line-end spacing, the middle input leaves no room for the third: B at x 8–58 pushes A1 to 74–124, and A2 would have to start at 140 but must cover its gate at 121–131. Segments short enough to fit (26 nm) violate the minimum area.
 - **Why 5 CPP fits:** one inserted dummy poly gives one more CPP of track length, for example B 15–65, A1 81–131, A2 147–197 on T2.
+- **Keeping 4 CPP with a SuperVia (Figure 9):** T2 holds two pins in 4 CPP (8 + 50 + 16 + 50 + 8 = 132 nm). The third input, the middle one, enters through M1 and a SuperVia, for example B 8–58 and A2 110–160 on T2, and a SuperVia at x 79–89 on T2 under an M1 line at x 74–94.
 - **Dummy poly inside the cell:** a `POLYDUMMY` line may sit on any poly-grid position. The LVS deck treats only `PO1` as a gate, so a channel that runs on under a dummy joins the S/D regions on both sides into one net in each tier.
 - **Diffusion break:** to keep the two sides apart, cut `FININTENT` under the dummy (for a dummy at x = 84, leave out x 77–91). Without the cut, both sides must be the same net in each tier. A CFET dummy gate cannot turn off both tiers at once, because tying it to VDD turns the nFET on and tying it to VSS turns the pFET on (inferred).
 
