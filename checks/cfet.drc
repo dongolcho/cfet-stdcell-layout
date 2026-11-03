@@ -14,16 +14,9 @@ if (dbu - 0.001).abs > 1e-9
 end
 
 # ---- rule values (nm), see cfet_rules.md sections 3 and 5 ----
-CELL_HEIGHT = 84
 CPP = 42
 GATE_WIDTH = 14
 CONTACT_WIDTH = 14
-TRACKS = { "T1" => [68, 79], "T2" => [47, 58], "T3" => [26, 37], "T4" => [5, 16] }
-EDGE_TRACKS = %w[T1 T4]
-CHANNELS = [[29, 34], [50, 55]]
-CHANNEL_SPAN = [26, 58]          # y range that every S/D contact must cover
-CONTACT_Y_LIMITS = [5, 79]       # y range a contact may escape to
-BPR_BANDS = [[-16, 16], [68, 100]]
 MINT_WIDTH = 11
 MINT_TRACK_SPACE = 10
 MINT_END_SPACE = 16
@@ -32,6 +25,19 @@ MINT_TO_CELL_EDGE = 8            # half of MINT_END_SPACE, so abutted cells keep
 CONTACT_SPACE = 10
 VIA_WIDTH = 10
 VIA_PASS_SPACE = 10              # Vbot to M0top, VBurTall to M0bot
+
+# Values that depend on the cell height, keyed by the prBoundary height in nm (cfet_rules.md section 3).
+RULES_BY_HEIGHT = {
+  84 => {
+    "name" => "4T",
+    "tracks" => { "T1" => [68, 79], "T2" => [47, 58], "T3" => [26, 37], "T4" => [5, 16] },
+    "edge_tracks" => %w[T1 T4],
+    "channels" => [[29, 34], [50, 55]],
+    "channel_span" => [26, 58],      # y range that every S/D contact must cover
+    "contact_y_limits" => [5, 79],   # y range a contact may escape to
+    "bpr_bands" => [[-16, 16], [68, 100]],
+  },
+}
 
 def to_um(value_nm)
   value_nm * 0.001
@@ -62,9 +68,17 @@ end
 frame = boundary.data.bbox
 left, bottom = frame.left, frame.bottom
 cell_width, cell_height = frame.width, frame.height
-if cell_height != CELL_HEIGHT || cell_width % CPP != 0
-  raise "Error: invalid prBoundary size #{cell_width} x #{cell_height} nm in '#{$input}'. A 4T cell is #{CELL_HEIGHT} nm high and a whole number of CPP (#{CPP} nm) wide."
+rules = RULES_BY_HEIGHT[cell_height]
+if !rules || cell_width % CPP != 0
+  raise "Error: invalid prBoundary size #{cell_width} x #{cell_height} nm in '#{$input}'. A 4T cell is 84 nm high and a whole number of CPP (#{CPP} nm) wide."
 end
+CELL_HEIGHT = cell_height
+TRACKS = rules["tracks"]
+EDGE_TRACKS = rules["edge_tracks"]
+CHANNELS = rules["channels"]
+CHANNEL_SPAN = rules["channel_span"]
+CONTACT_Y_LIMITS = rules["contact_y_limits"]
+BPR_BANDS = rules["bpr_bands"]
 cpp_count = cell_width / CPP
 
 # Builds a polygon layer from boxes given in nm relative to the cell origin.
