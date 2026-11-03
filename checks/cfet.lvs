@@ -112,7 +112,10 @@ netlist.simplify
 schematic.simplify
 align
 
-if compare
+# simplify removes a circuit without devices, and compare then has nothing to report as different.
+if !netlist.circuit_by_name(source.cell_name)
+  puts("Error: missing transistors in cell '#{source.cell_name}' of '#{$input}'. LVS did not compare it with the schematic. Draw PO1 gates across FININTENT.")
+elsif compare
   puts("Info: LVS found the layout of '#{$input}' equal to the schematic '#{schematic_path}'.")
 else
   puts("Error: LVS found differences between the layout '#{$input}' and the schematic '#{schematic_path}'. Open #{$report} in KLayout (Tools > Netlist Browser) to see them.")
