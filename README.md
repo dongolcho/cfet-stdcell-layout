@@ -11,7 +11,7 @@ Rules, KLayout setup and checks for drawing the CFET standard cells of Sherazi e
 - `tech/cfet_sherazi2019/cfet.lyt`: KLayout technology file. Sets the dbu to 1 nm, offers editing grids of 1, 5, 21 and 42 nm, and loads `cfet.lyp`. 21 nm is the MINT pitch and 42 nm is the CPP.
 - `checks/`: DRC and LVS decks and the script that runs them.
 - `netlists/`: schematic netlists (SPICE) for LVS, one per cell and height: `<cell>_4t.cir`, `<cell>_3t.cir`.
-- `layouts/4t/`, `layouts/3t/`: hand-drawn layouts, one GDS per cell. git keeps the earlier versions.
+- `layouts/4t/`, `layouts/3t/`: hand-drawn layouts, one GDS per cell, or per cell and variant (`<cell>_<variant>.gds`) when a cell is drawn in more than one way. git keeps the earlier versions.
 
 ## Using the technology in KLayout
 
