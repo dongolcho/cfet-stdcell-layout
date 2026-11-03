@@ -1,7 +1,11 @@
-# KLayout LVS deck for CFET 4T cells drawn with the cfet.lyp layers.
+# KLayout LVS deck for CFET 4T and 3T cells drawn with the cfet.lyp layers.
 #
 # Usage:
-#   klayout_app.exe -b -r cfet.lvs -rd input=<layout.gds> -rd schematic=<netlist.cir> -rd report=<report.lvsdb> [-rd cell=<top cell>]
+#   klayout_app.exe -b -r cfet.lvs -rd input=<layout.gds> -rd report=<report.lvsdb>
+#                   (-rd netlists=<folder> | -rd schematic=<netlist.cir>) [-rd cell=<top cell>]
+#
+# With netlists=<folder>, the schematic is <folder>/<cell>_4t.cir or <cell>_3t.cir,
+# chosen by the prBoundary height (84 nm for 4T, 63 nm for 3T).
 #
 # Device model: every gate column holds one pFET in the bottom tier and one nFET in the top tier.
 # Both tiers share the FININTENT and PO1 shapes, so each tier gets its own copy of the channel
@@ -51,6 +55,28 @@ v1         = input(60, 0)
 m1         = input(61, 0)
 mint_text  = labels(50, 0)
 bpr_text   = labels(1, 0)
+boundary   = input(100, 0)
+
+# ---- schematic netlist: given directly, or chosen by the cell height ----
+NETLIST_SUFFIX_BY_HEIGHT = { 84 => "4t", 63 => "3t" }
+schematic_path = $schematic
+if !schematic_path
+  if !$netlists
+    raise "Error: missing schematic for '#{$input}'. LVS was not run. Pass -rd netlists=<folder> or -rd schematic=<netlist.cir>."
+  end
+  if boundary.is_empty?
+    raise "Error: missing prBoundary (layer 100/0) in '#{$input}'. LVS reads the cell height from it to choose the schematic and was not run. Draw the cell outline on prBoundary."
+  end
+  height_nm = (boundary.data.bbox.height * dbu * 1000).round
+  suffix = NETLIST_SUFFIX_BY_HEIGHT[height_nm]
+  if !suffix
+    raise "Error: invalid prBoundary height #{height_nm} nm in '#{$input}'. No schematic is assigned to this height; LVS was not run. Draw prBoundary 84 nm high (4T) or 63 nm high (3T)."
+  end
+  schematic_path = File.join($netlists, "#{source.cell_name}_#{suffix}.cir")
+end
+if !File.exist?(schematic_path)
+  raise "Error: missing schematic netlist '#{schematic_path}'. LVS was not run. Add the netlist, or pass another one with -rd schematic=<netlist.cir> (run_checks.ps1: -Schematic)."
+end
 
 # Separate copies per tier, so that the two tiers are not connected through the shared shapes.
 pfet_channel = fin & gate
@@ -80,14 +106,17 @@ connect(v1, m1)
 connect(mint, mint_text)
 connect(bpr, bpr_text)
 
-schematic($schematic, RBA::NetlistSpiceReader::new(Mos3SpiceReader::new))
+schematic(schematic_path, RBA::NetlistSpiceReader::new(Mos3SpiceReader::new))
 
 netlist.simplify
 schematic.simplify
 align
 
-if compare
-  puts("Info: LVS found the layout of '#{$input}' equal to the schematic '#{$schematic}'.")
+# simplify removes a circuit without devices, and compare then has nothing to report as different.
+if !netlist.circuit_by_name(source.cell_name)
+  puts("Error: missing transistors in cell '#{source.cell_name}' of '#{$input}'. LVS did not compare it with the schematic. Draw PO1 gates across FININTENT.")
+elsif compare
+  puts("Info: LVS found the layout of '#{$input}' equal to the schematic '#{schematic_path}'.")
 else
-  puts("Error: LVS found differences between the layout '#{$input}' and the schematic '#{$schematic}'. Open #{$report} in KLayout (Tools > Netlist Browser) to see them.")
+  puts("Error: LVS found differences between the layout '#{$input}' and the schematic '#{schematic_path}'. Open #{$report} in KLayout (Tools > Netlist Browser) to see them.")
 end

@@ -1,0 +1,14 @@
+* AOI21D1: ZN = !((A1 & A2) | B), CFET 3T (Sherazi et al., SPIE 2019, Figures 9 and 10)
+* Bottom tier pFET, top tier nFET. A 3T transistor has one nanosheet of 5 nm drawn width,
+* so W is 5 nm, and L is the gate width 14 nm (cfet_rules.md).
+* Element order: M<name> drain gate source bulk model
+.SUBCKT AOI21D1 A1 A2 B ZN VDD VSS
+* pull-up: VDD - B - X - (A1 || A2) - ZN
+MPB  X  B  VDD VDD PMOS L=14n W=5n
+MPA1 ZN A1 X   VDD PMOS L=14n W=5n
+MPA2 ZN A2 X   VDD PMOS L=14n W=5n
+* pull-down: ZN - A1 - N1 - A2 - VSS, and ZN - B - VSS
+MNA1 ZN A1 N1  VSS NMOS L=14n W=5n
+MNA2 N1 A2 VSS VSS NMOS L=14n W=5n
+MNB  ZN B  VSS VSS NMOS L=14n W=5n
+.ENDS

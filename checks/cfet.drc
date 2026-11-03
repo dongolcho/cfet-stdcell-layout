@@ -1,29 +1,23 @@
-# KLayout DRC deck for the CFET 4T hand-layout rules written in ../cfet_rules.md.
+# KLayout DRC deck for the CFET 4T and 3T hand-layout rules written in ../cfet_rules.md.
 #
 # Usage:
 #   klayout_app.exe -b -r cfet.drc -rd input=<layout.gds> -rd report=<report.lyrdb> [-rd cell=<top cell>]
 #
 # All rule values are in nm. The deck derives the allowed positions (MINT tracks, gate grid,
 # S/D columns) from the cell's prBoundary, so the cell may sit anywhere in the layout.
+# The prBoundary height selects the rule set: 84 nm for 4T, 63 nm for 3T.
 
 source($input, $cell)
-report("CFET 4T DRC (cfet_rules.md)", $report)
+report("CFET DRC (cfet_rules.md)", $report)
 
 if (dbu - 0.001).abs > 1e-9
   raise "Error: invalid database unit #{dbu} um in '#{$input}'. The rules use whole nm. Save the layout with dbu 0.001 um (technology cfet_sherazi2019)."
 end
 
 # ---- rule values (nm), see cfet_rules.md sections 3 and 5 ----
-CELL_HEIGHT = 84
 CPP = 42
 GATE_WIDTH = 14
 CONTACT_WIDTH = 14
-TRACKS = { "T1" => [68, 79], "T2" => [47, 58], "T3" => [26, 37], "T4" => [5, 16] }
-EDGE_TRACKS = %w[T1 T4]
-CHANNELS = [[29, 34], [50, 55]]
-CHANNEL_SPAN = [26, 58]          # y range that every S/D contact must cover
-CONTACT_Y_LIMITS = [5, 79]       # y range a contact may escape to
-BPR_BANDS = [[-16, 16], [68, 100]]
 MINT_WIDTH = 11
 MINT_TRACK_SPACE = 10
 MINT_END_SPACE = 16
@@ -32,6 +26,28 @@ MINT_TO_CELL_EDGE = 8            # half of MINT_END_SPACE, so abutted cells keep
 CONTACT_SPACE = 10
 VIA_WIDTH = 10
 VIA_PASS_SPACE = 10              # Vbot to M0top, VBurTall to M0bot
+
+# Values that depend on the cell height, keyed by the prBoundary height in nm (cfet_rules.md section 3).
+RULES_BY_HEIGHT = {
+  84 => {
+    "name" => "4T",
+    "tracks" => { "T1" => [68, 79], "T2" => [47, 58], "T3" => [26, 37], "T4" => [5, 16] },
+    "edge_tracks" => %w[T1 T4],
+    "channels" => [[29, 34], [50, 55]],
+    "channel_span" => [26, 58],      # y range that every S/D contact must cover
+    "contact_y_limits" => [5, 79],   # y range a contact may escape to
+    "bpr_bands" => [[-16, 16], [68, 100]],
+  },
+  63 => {
+    "name" => "3T",
+    "tracks" => { "T1" => [47, 58], "T2" => [26, 37], "T3" => [5, 16] },
+    "edge_tracks" => %w[T1 T3],
+    "channels" => [[29, 34]],
+    "channel_span" => [26, 37],
+    "contact_y_limits" => [5, 58],
+    "bpr_bands" => [[-16, 16], [47, 79]],
+  },
+}
 
 def to_um(value_nm)
   value_nm * 0.001
@@ -62,9 +78,21 @@ end
 frame = boundary.data.bbox
 left, bottom = frame.left, frame.bottom
 cell_width, cell_height = frame.width, frame.height
-if cell_height != CELL_HEIGHT || cell_width % CPP != 0
-  raise "Error: invalid prBoundary size #{cell_width} x #{cell_height} nm in '#{$input}'. A 4T cell is #{CELL_HEIGHT} nm high and a whole number of CPP (#{CPP} nm) wide."
+rules = RULES_BY_HEIGHT[cell_height]
+if !rules
+  heights = RULES_BY_HEIGHT.map { |height, set| "#{height} nm high (#{set['name']})" }.join(" or ")
+  raise "Error: invalid prBoundary height #{cell_height} nm in '#{$input}'. No rule set exists for this height; the cell was not checked. Draw prBoundary #{heights}."
 end
+if cell_width % CPP != 0
+  raise "Error: invalid prBoundary width #{cell_width} nm in '#{$input}'. The cell was not checked. Draw prBoundary a whole number of CPP (#{CPP} nm) wide."
+end
+CELL_HEIGHT = cell_height
+TRACKS = rules["tracks"]
+EDGE_TRACKS = rules["edge_tracks"]
+CHANNELS = rules["channels"]
+CHANNEL_SPAN = rules["channel_span"]
+CONTACT_Y_LIMITS = rules["contact_y_limits"]
+BPR_BANDS = rules["bpr_bands"]
 cpp_count = cell_width / CPP
 
 # Builds a polygon layer from boxes given in nm relative to the cell origin.
@@ -83,7 +111,7 @@ inner_gate_columns = make_band_layer((1...cpp_count).map { |k|
   x = left + k * CPP
   [x - GATE_WIDTH / 2, bottom, x + GATE_WIDTH / 2, bottom + CELL_HEIGHT]
 })
-edge_gate_columns = make_band_layer([0, cpp_count].map { |k|
+all_gate_columns = make_band_layer((0..cpp_count).map { |k|
   x = left + k * CPP
   [x - GATE_WIDTH / 2, bottom, x + GATE_WIDTH / 2, bottom + CELL_HEIGHT]
 })
@@ -146,24 +174,30 @@ def check(result, rule, description, shape_layer = nil)
   list_locations(result, shape_layer) if count > 0
 end
 
-puts("Info: checking '#{$input}' against cfet_rules.md")
+# Formats y ranges as "lo..hi, lo..hi" for check descriptions.
+def format_ranges(ranges)
+  ranges.map { |lo, hi| "#{lo}..#{hi}" }.join(", ")
+end
+
+puts("Info: checking '#{$input}' against the #{rules['name']} rules of cfet_rules.md")
 
 # Frame layers (rules section 3)
-check(bpr - bpr_band, "BPR.POS", "MBURINTENT outside the BPR bands centered on the cell edges (y -16..16, 68..100)", bpr)
-check(fin - channel_band, "FIN.POS", "FININTENT outside the two channel lines (y 29..34, 50..55)", fin)
-check(gate - inner_gate_columns, "PO.GRID", "PO1 off the gate grid (x = k*42 +-7 inside the cell, y 0..84)", gate)
-check(dummy_poly - edge_gate_columns, "PODUMMY.GRID", "POLYDUMMY off the cell-edge poly lines (x = 0 or cell width, +-7)", dummy_poly)
+check(bpr - bpr_band, "BPR.POS", "MBURINTENT outside the BPR bands centered on the cell edges (y #{format_ranges(BPR_BANDS)})", bpr)
+check(fin - channel_band, "FIN.POS", "FININTENT outside the channel lines (y #{format_ranges(CHANNELS)})", fin)
+check(gate - inner_gate_columns, "PO.GRID", "PO1 off the gate grid (x = k*42 +-7 inside the cell, y 0..#{CELL_HEIGHT})", gate)
+check(dummy_poly - all_gate_columns, "PODUMMY.GRID", "POLYDUMMY off the poly grid (x = k*42 +-7, cell edges included)", dummy_poly)
+check(dummy_poly & gate, "PODUMMY.PO", "POLYDUMMY overlaps PO1; a poly line is either a gate or a dummy", dummy_poly)
 
 # S/D contacts (rules section 5)
 [[m0bot, "M0BOT"], [m0top, "M0TOP"]].each do |contact, name|
-  check(contact - sd_columns, "#{name}.POS", "#{name == 'M0BOT' ? 'M0bot' : 'M0top'} outside the S/D columns (x = center +-7, y 5..79)", contact)
+  check(contact - sd_columns, "#{name}.POS", "#{name == 'M0BOT' ? 'M0bot' : 'M0top'} outside the S/D columns (x = center +-7, y #{format_ranges([CONTACT_Y_LIMITS])})", contact)
   check(contact.width(to_um(CONTACT_WIDTH)), "#{name}.W", "contact narrower than #{CONTACT_WIDTH} nm")
   check(contact.space(to_um(CONTACT_SPACE)), "#{name}.S", "contacts of the same tier closer than #{CONTACT_SPACE} nm")
-  check(channel_spans.interacting(contact) - contact, "#{name}.CH", "contact does not cover the whole channel span (y 26..58)", contact)
+  check(channel_spans.interacting(contact) - contact, "#{name}.CH", "contact does not cover the whole channel span (y #{format_ranges([CHANNEL_SPAN])})", contact)
 end
 
 # MINT (rules section 5)
-check(mint - track_band, "MINT.TRK", "MINT off the tracks T1..T4", mint)
+check(mint - track_band, "MINT.TRK", "MINT off the tracks #{TRACKS.keys.first}..#{TRACKS.keys.last}", mint)
 check(mint.width(to_um(MINT_WIDTH)), "MINT.W", "MINT narrower than #{MINT_WIDTH} nm")
 check(mint.space(to_um(MINT_TRACK_SPACE)), "MINT.S", "MINT shapes closer than #{MINT_TRACK_SPACE} nm")
 TRACKS.each do |name, (lo, hi)|
@@ -179,7 +213,7 @@ vias.each do |name, via|
   check(via - track_band, "#{name}.TRK", "via outside the y range of a track", via)
   check(via.width(to_um(VIA_WIDTH)), "#{name}.W", "via smaller than #{VIA_WIDTH} nm")
 end
-check(vbot - edge_track_band, "VBOT.EDGE", "Vbot on a center track; M0bot can be picked up only at T1 or T4", vbot)
+check(vbot - edge_track_band, "VBOT.EDGE", "Vbot on a center track; M0bot can be picked up only at #{EDGE_TRACKS.join(' or ')}", vbot)
 landings = [
   [vbot, m0bot, "VBOT.LAND.M0", "Vbot not fully on M0bot"],
   [vbot, mint, "VBOT.LAND.MINT", "Vbot not fully under MINT"],
