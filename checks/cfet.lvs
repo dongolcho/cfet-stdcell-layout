@@ -10,7 +10,7 @@
 # Device model: every gate column holds one pFET in the bottom tier and one nFET in the top tier.
 # Both tiers share the FININTENT and PO1 shapes, so each tier gets its own copy of the channel
 # layers; the bottom copy connects only to M0bot and the top copy only to M0top.
-# Layout pins are texts on MINTINTENT (signals) and on MBURINTENT (VDD, VSS).
+# Layout pins are texts on MINTINTENT or M1 (signals) and on MBURINTENT (VDD, VSS).
 
 source($input, $cell)
 report_lvs($report)
@@ -53,7 +53,9 @@ vintga     = input(42, 0)
 mint       = input(50, 0)
 v1         = input(60, 0)
 m1         = input(61, 0)
+supervia   = input(62, 0)
 mint_text  = labels(50, 0)
+m1_text    = labels(61, 0)
 bpr_text   = labels(1, 0)
 boundary   = input(100, 0)
 
@@ -103,7 +105,10 @@ connect(m0top, vbur_tall)
 connect(vbur_tall, bpr)
 connect(mint, v1)
 connect(v1, m1)
+connect(gate, supervia)
+connect(supervia, m1)
 connect(mint, mint_text)
+connect(m1, m1_text)
 connect(bpr, bpr_text)
 
 schematic(schematic_path, RBA::NetlistSpiceReader::new(Mos3SpiceReader::new))

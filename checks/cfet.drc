@@ -69,6 +69,7 @@ vintga     = input(42, 0)
 mint       = input(50, 0)
 v1         = input(60, 0)
 m1         = input(61, 0)
+supervia   = input(62, 0)
 boundary   = input(100, 0)
 
 # ---- cell frame from prBoundary ----
@@ -208,7 +209,8 @@ check(mint.with_area(nil, MINT_MIN_AREA_NM2 * 1e-6), "MINT.A", "MINT segment sma
 check(mint - mint_allowed, "MINT.EDGE", "MINT end closer than #{MINT_TO_CELL_EDGE} nm to the left or right cell edge", mint)
 
 # Vias (rules sections 5 and 6)
-vias = { "VBOT" => vbot, "VTOP" => vtop, "VINTGA" => vintga, "VBURSHORT" => vbur_short, "VBURTALL" => vbur_tall, "V1" => v1 }
+vias = { "VBOT" => vbot, "VTOP" => vtop, "VINTGA" => vintga, "VBURSHORT" => vbur_short, "VBURTALL" => vbur_tall, "V1" => v1,
+         "SUPERVIA" => supervia }
 vias.each do |name, via|
   check(via - track_band, "#{name}.TRK", "via outside the y range of a track", via)
   check(via.width(to_um(VIA_WIDTH)), "#{name}.W", "via smaller than #{VIA_WIDTH} nm")
@@ -227,6 +229,8 @@ landings = [
   [vbur_tall, bpr, "VBURTALL.LAND.BPR", "VBurTall not fully on BPR"],
   [v1, mint, "V1.LAND.MINT", "V1 not fully on MINT"],
   [v1, m1, "V1.LAND.M1", "V1 not fully under M1"],
+  [supervia, gate, "SUPERVIA.LAND.PO", "SuperVia not fully on PO1"],
+  [supervia, m1, "SUPERVIA.LAND.M1", "SuperVia not fully under M1"],
   [m0merge, m0bot, "M0MERGE.LAND.BOT", "M0merge not fully on M0bot"],
   [m0merge, m0top, "M0MERGE.LAND.TOP", "M0merge not fully on M0top"],
 ]
@@ -237,6 +241,8 @@ check((vbot & m0top) + vbot.separation(m0top, to_um(VIA_PASS_SPACE)).polygons, "
       "Vbot closer than #{VIA_PASS_SPACE} nm to M0top (Vbot passes the top-tier contact level)")
 check((vbur_tall & m0bot) + vbur_tall.separation(m0bot, to_um(VIA_PASS_SPACE)).polygons, "VBURTALL.M0BOT",
       "VBurTall closer than #{VIA_PASS_SPACE} nm to M0bot (VBurTall passes the bottom-tier contact level)")
+check((supervia & mint) + supervia.separation(mint, to_um(VIA_PASS_SPACE)).polygons, "SUPERVIA.MINT",
+      "SuperVia closer than #{VIA_PASS_SPACE} nm to MINT (SuperVia passes the MINT level)")
 check(m0merge & fin, "M0MERGE.CH", "M0merge over a channel line; merge away from the nanosheets", m0merge)
 
 if $violation_total == 0
