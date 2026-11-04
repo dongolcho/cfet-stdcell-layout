@@ -32,7 +32,7 @@ Coordinates are integer nm (dbu 0.001 µm); the DRC deck stops on any other dbu.
 
 ## How the pieces fit
 
-- **Layer numbers live in several places.** `cfet_rules.md` section 4, `tech/cfet_sherazi2019/cfet.lyp`, and the `input(n, 0)` lines of both `checks/cfet.drc` and `checks/cfet.lvs` (plus `README.md` where it names one). The decks hardcode the numbers and do not read the `.lyp`. A new or renumbered layer changes all of them, and the LVS `connect(...)` chain when the layer conducts.
+- **Layer numbers live in several places.** `cfet_rules.md` section 4, `tech/cfet_sherazi2019/cfet.lyp`, and the `input(n, 0)` lines of both `checks/cfet.drc` and `checks/cfet.lvs` (plus `README.md` where it names one). The decks hardcode the numbers and do not read the `.lyp`. A new or renumbered layer changes all of them, and, when the layer conducts, both the LVS `connect(...)` chain and the Net Tracer `<connection>` lines in `tech/cfet_sherazi2019/cfet.lyt`.
 - **`cfet.drc` copies the rule values.** Its constants (`CPP`, `MINT_END_SPACE`, ...) and `RULES_BY_HEIGHT` repeat `cfet_rules.md` sections 3, 5 and 7; change both together.
 - **The `prBoundary` height selects the rule set, in each deck separately.** DRC looks it up in `RULES_BY_HEIGHT` (84, 63, 126 or 189 nm); LVS looks it up in `NETLIST_SUFFIX_BY_HEIGHT` to pick `netlists/<top cell>_4t.cir`, `_3t.cir`, `_3t2h.cir` or `_3t3h.cir`. A new height needs both. DRC derives the tracks, the gate grid and the S/D columns from the `prBoundary` lower-left corner, so a cell may sit anywhere.
 - **Variant files keep the top cell name.** LVS finds the netlist by the top cell name, not the file name, so `layouts/3t/AOI21D1_5cpp.gds` and `AOI21D1_4cpp.gds` both hold the cell `AOI21D1`.
