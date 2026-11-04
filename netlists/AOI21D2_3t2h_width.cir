@@ -1,0 +1,14 @@
+* AOI21D2: ZN = !((A1 & A2) | B), CFET double-height 3T (Sherazi et al., SPIE 2019, Figure 11)
+* Drive strength 2: every transistor of AOI21D1 with twice the width.
+* W = 10 nm is the total width of two 5 nm devices; L = 14 nm.
+* Element order: M<name> drain gate source bulk model
+.SUBCKT AOI21D2 A1 A2 B ZN VDD VSS
+* pull-up: VDD - B - X - (A1 || A2) - ZN
+MPB  X  B  VDD VDD PMOS L=14n W=10n
+MPA1 ZN A1 X   VDD PMOS L=14n W=10n
+MPA2 ZN A2 X   VDD PMOS L=14n W=10n
+* pull-down: ZN - A1 - N1 - A2 - VSS, and ZN - B - VSS
+MNA1 ZN A1 N1  VSS NMOS L=14n W=10n
+MNA2 N1 A2 VSS VSS NMOS L=14n W=10n
+MNB  ZN B  VSS VSS NMOS L=14n W=10n
+.ENDS

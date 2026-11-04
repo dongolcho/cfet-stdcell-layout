@@ -1,0 +1,20 @@
+* AOI21D2: ZN = !((A1 & A2) | B), CFET double-height 3T (Sherazi et al., SPIE 2019, Figure 11)
+* Drive strength 2: every transistor of AOI21D1 becomes two fingers.
+* Each finger is one 3T device: one nanosheet, W = 5 nm, L = 14 nm.
+* Element order: M<name> drain gate source bulk model
+.SUBCKT AOI21D2 A1 A2 B ZN VDD VSS
+* pull-up: VDD - B - X - (A1 || A2) - ZN
+MPB_1  X  B  VDD VDD PMOS L=14n W=5n
+MPB_2  X  B  VDD VDD PMOS L=14n W=5n
+MPA1_1 ZN A1 X   VDD PMOS L=14n W=5n
+MPA1_2 ZN A1 X   VDD PMOS L=14n W=5n
+MPA2_1 ZN A2 X   VDD PMOS L=14n W=5n
+MPA2_2 ZN A2 X   VDD PMOS L=14n W=5n
+* pull-down: ZN - A1 - N1 - A2 - VSS, and ZN - B - VSS
+MNA1_1 ZN A1 N1  VSS NMOS L=14n W=5n
+MNA1_2 ZN A1 N1  VSS NMOS L=14n W=5n
+MNA2_1 N1 A2 VSS VSS NMOS L=14n W=5n
+MNA2_2 N1 A2 VSS VSS NMOS L=14n W=5n
+MNB_1  ZN B  VSS VSS NMOS L=14n W=5n
+MNB_2  ZN B  VSS VSS NMOS L=14n W=5n
+.ENDS
