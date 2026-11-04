@@ -8,7 +8,7 @@ Rules, KLayout setup and checks for drawing the CFET standard cells of Sherazi e
 
 - `cfet_rules.md`: dimension and connection rules. Each value is tagged paper text, measured, derived or assumed. Read sections 3 (coordinates) and 6 (connection rules) before drawing.
 - `tech/cfet_sherazi2019/cfet.lyp`: KLayout layer properties. Sets the 17 layer names of the Figure 8 legend, their GDS numbers, colors and fill patterns, plus `SuperVia` (62/0, paper Figure 9) and the reference-only layer `GUIDE` (200/0).
-- `tech/cfet_sherazi2019/cfet.lyt`: KLayout technology file. Sets the dbu to 1 nm, offers editing grids of 1, 5, 21 and 42 nm, and loads `cfet.lyp`. 21 nm is the MINT pitch and 42 nm is the CPP.
+- `tech/cfet_sherazi2019/cfet.lyt`: KLayout technology file. Sets the dbu to 1 nm, offers editing grids of 1, 5, 21 and 42 nm, loads `cfet.lyp`, and sets up the Net Tracer. 21 nm is the MINT pitch and 42 nm is the CPP.
 - `checks/`: DRC and LVS decks and the script that runs them.
 - `netlists/`: schematic netlists (SPICE) for LVS, one per cell and height: `<cell>_4t.cir`, `<cell>_3t.cir`, `<cell>_3t2h.cir` for a double-height 3T cell and `<cell>_3t3h.cir` for a triple-height 3T cell.
 - `layouts/4t/`, `layouts/3t/`: hand-drawn layouts, one GDS per cell, or per cell and variant (`<cell>_<variant>.gds`) when a cell is drawn in more than one way. git keeps the earlier versions.
@@ -22,6 +22,7 @@ Rules, KLayout setup and checks for drawing the CFET standard cells of Sherazi e
    KLayout then registers the technology `cfet_sherazi2019` at startup.
 2. When creating a new layout, select the technology `cfet_sherazi2019`. The layer list and the grids are set with it.
 3. To use the layer properties without the technology, open `cfet.lyp` with `File > Load Layer Properties`, and check that the dbu is 0.001 µm.
+4. To see what a shape is connected to, choose `Tools > Trace Net` and click the shape. The tracer follows contacts, vias, MINT, M1 and gates (`PO1` outside `POLYCUT`). It does not follow `FININTENT`, which holds both tiers in one shape, so S/D joined only by a channel between two gates are not traced.
 
 ## DRC and LVS
 
