@@ -5,7 +5,8 @@
 #
 # All rule values are in nm. The deck derives the allowed positions (MINT tracks, gate grid,
 # S/D columns) from the cell's prBoundary, so the cell may sit anywhere in the layout.
-# The prBoundary height selects the rule set: 84 nm for 4T, 63 nm for 3T.
+# The prBoundary height selects the rule set: 84 nm for 4T, 63 nm for 3T, 126 nm for a
+# double-height 3T cell.
 
 source($input, $cell)
 report("CFET DRC (cfet_rules.md)", $report)
@@ -47,6 +48,17 @@ RULES_BY_HEIGHT = {
     "contact_y_limits" => [5, 58],
     "bpr_bands" => [[-16, 16], [47, 79]],
   },
+  # Two 3T rows; the upper row is the lower one mirrored about y = 63, so VDD is shared in the middle.
+  126 => {
+    "name" => "double-height 3T",
+    "tracks" => { "T1" => [110, 121], "T2" => [89, 100], "T3" => [68, 79],
+                  "T4" => [47, 58], "T5" => [26, 37], "T6" => [5, 16] },
+    "edge_tracks" => %w[T1 T3 T4 T6],
+    "channels" => [[29, 34], [92, 97]],
+    "channel_spans" => [[26, 37], [89, 100]],
+    "contact_y_limits" => [5, 121],  # a contact may run across the middle rail into the other row
+    "bpr_bands" => [[-16, 16], [47, 79], [110, 142]],
+  },
 }
 
 def to_um(value_nm)
@@ -81,7 +93,8 @@ left, bottom = frame.left, frame.bottom
 cell_width, cell_height = frame.width, frame.height
 rules = RULES_BY_HEIGHT[cell_height]
 if !rules
-  heights = RULES_BY_HEIGHT.map { |height, set| "#{height} nm high (#{set['name']})" }.join(" or ")
+  choices = RULES_BY_HEIGHT.map { |height, set| "#{height} nm high (#{set['name']})" }
+  heights = choices.size > 1 ? "#{choices[0...-1].join(', ')} or #{choices[-1]}" : choices[0]
   raise "Error: invalid prBoundary height #{cell_height} nm in '#{$input}'. No rule set exists for this height; the cell was not checked. Draw prBoundary #{heights}."
 end
 if cell_width % CPP != 0
