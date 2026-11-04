@@ -34,7 +34,7 @@ RULES_BY_HEIGHT = {
     "tracks" => { "T1" => [68, 79], "T2" => [47, 58], "T3" => [26, 37], "T4" => [5, 16] },
     "edge_tracks" => %w[T1 T4],
     "channels" => [[29, 34], [50, 55]],
-    "channel_span" => [26, 58],      # y range that every S/D contact must cover
+    "channel_spans" => [[26, 58]],   # y ranges that an S/D contact must cover wherever it reaches one
     "contact_y_limits" => [5, 79],   # y range a contact may escape to
     "bpr_bands" => [[-16, 16], [68, 100]],
   },
@@ -43,7 +43,7 @@ RULES_BY_HEIGHT = {
     "tracks" => { "T1" => [47, 58], "T2" => [26, 37], "T3" => [5, 16] },
     "edge_tracks" => %w[T1 T3],
     "channels" => [[29, 34]],
-    "channel_span" => [26, 37],
+    "channel_spans" => [[26, 37]],
     "contact_y_limits" => [5, 58],
     "bpr_bands" => [[-16, 16], [47, 79]],
   },
@@ -91,7 +91,7 @@ CELL_HEIGHT = cell_height
 TRACKS = rules["tracks"]
 EDGE_TRACKS = rules["edge_tracks"]
 CHANNELS = rules["channels"]
-CHANNEL_SPAN = rules["channel_span"]
+CHANNEL_SPANS = rules["channel_spans"]
 CONTACT_Y_LIMITS = rules["contact_y_limits"]
 BPR_BANDS = rules["bpr_bands"]
 cpp_count = cell_width / CPP
@@ -120,9 +120,9 @@ sd_columns = make_band_layer((0...cpp_count).map { |k|
   x = left + k * CPP + CPP / 2
   [x - CONTACT_WIDTH / 2, bottom + CONTACT_Y_LIMITS[0], x + CONTACT_WIDTH / 2, bottom + CONTACT_Y_LIMITS[1]]
 })
-channel_spans = make_band_layer((0...cpp_count).map { |k|
+channel_spans = make_band_layer((0...cpp_count).flat_map { |k|
   x = left + k * CPP + CPP / 2
-  [x - CONTACT_WIDTH / 2, bottom + CHANNEL_SPAN[0], x + CONTACT_WIDTH / 2, bottom + CHANNEL_SPAN[1]]
+  CHANNEL_SPANS.map { |lo, hi| [x - CONTACT_WIDTH / 2, bottom + lo, x + CONTACT_WIDTH / 2, bottom + hi] }
 })
 mint_allowed = make_band_layer([[left + MINT_TO_CELL_EDGE, bottom, left + cell_width - MINT_TO_CELL_EDGE, bottom + CELL_HEIGHT]])
 
@@ -194,7 +194,7 @@ check(dummy_poly & gate, "PODUMMY.PO", "POLYDUMMY overlaps PO1; a poly line is e
   check(contact - sd_columns, "#{name}.POS", "#{name == 'M0BOT' ? 'M0bot' : 'M0top'} outside the S/D columns (x = center +-7, y #{format_ranges([CONTACT_Y_LIMITS])})", contact)
   check(contact.width(to_um(CONTACT_WIDTH)), "#{name}.W", "contact narrower than #{CONTACT_WIDTH} nm")
   check(contact.space(to_um(CONTACT_SPACE)), "#{name}.S", "contacts of the same tier closer than #{CONTACT_SPACE} nm")
-  check(channel_spans.interacting(contact) - contact, "#{name}.CH", "contact does not cover the whole channel span (y #{format_ranges([CHANNEL_SPAN])})", contact)
+  check(channel_spans.interacting(contact) - contact, "#{name}.CH", "contact does not cover the whole channel span (y #{format_ranges(CHANNEL_SPANS)})", contact)
 end
 
 # MINT (rules section 5)
