@@ -74,7 +74,7 @@ The GDS layer numbers are set by this document (assumed). The layer names follow
 2. `FININTENT` (2/0): nanosheet channel line. The top and bottom tiers are stacked at the same position, so it is drawn once.
 3. `PO1` (10/0): gate, shared by both tiers.
 4. `POLYDUMMY` (11/0): dummy poly on the left and right cell boundaries, and on any poly line inside the cell where a dummy is inserted (section 7).
-5. `POLYCUT` (12/0): area that cuts the gates at the top and bottom cell boundaries.
+5. `POLYCUT` (12/0): area that cuts the gates, at the top and bottom cell boundaries and wherever a gate line must be split (section 7, double height). The decks take PO1 minus `POLYCUT` as the gate.
 6. `M0bot` (20/0): S/D contact of the bottom tier (pFET).
 7. `M0top` (21/0): S/D contact of the top tier (nFET).
 8. `M0merge` (22/0): layer that joins `M0top` and `M0bot` of the same S/D column directly inside the MOL. MOL (middle of line) is the set of contact layers between the devices and the first routing layer.
@@ -217,6 +217,37 @@ All other dimensions and connection rules are the same as for 4T, with T3 in pla
 - **Keeping 4 CPP with a SuperVia (Figure 9):** T2 holds two pins in 4 CPP (8 + 50 + 16 + 50 + 8 = 132 nm). The third input, the middle one, enters through M1 and a SuperVia, for example B 8–58 and A2 110–160 on T2, and a SuperVia at x 79–89 on T2 under an M1 line at x 74–94.
 - **Dummy poly inside the cell:** a `POLYDUMMY` line may sit on any poly-grid position. The LVS deck treats only `PO1` as a gate, so a channel that runs on under a dummy joins the S/D regions on both sides into one net in each tier.
 - **Diffusion break:** to keep the two sides apart, cut `FININTENT` under the dummy (for a dummy at x = 84, leave out x 77–91). Without the cut, both sides must be the same net in each tier. A CFET dummy gate cannot turn off both tiers at once, because tying it to VDD turns the nFET on and tying it to VSS turns the pFET on (inferred).
+
+### Double-height 3T (126 nm)
+
+A double-height cell stacks two 3T rows (paper Figure 11). The upper row is the lower row mirrored about y = 63, so the two rows share the VDD rail in the middle.
+
+| Item | y start (nm) | y end (nm) | Basis |
+|---|---:|---:|---|
+| Cell boundary | 0 | 126 | derived |
+| BPR, VSS (South) | -16 | 16 | derived |
+| BPR, VDD (middle) | 47 | 79 | derived |
+| BPR, VSS (North) | 110 | 142 | derived |
+| MINT T1 (North) | 110 | 121 | derived |
+| MINT T2 | 89 | 100 | derived |
+| MINT T3 | 68 | 79 | derived |
+| MINT T4 | 47 | 58 | derived |
+| MINT T5 | 26 | 37 | derived |
+| MINT T6 (South) | 5 | 16 | derived |
+| Channel, upper row | 92 | 97 | derived |
+| Channel, lower row | 29 | 34 | derived |
+| Channel span, upper row | 89 | 100 | derived |
+| Channel span, lower row | 26 | 37 | derived |
+| Gate and dummy poly | 0 | 126 | derived |
+| S/D contact escape limits | 5 | 121 | derived |
+| `POLYCUT` between the rows | 58 | 68 | assumed |
+
+- **Rail order:** VSS, VDD, VSS from the bottom, as labeled in Figure 11 (paper text). The middle label is partly hidden under other shapes in the figure.
+- **Tracks:** T1, T3, T4 and T6 lie over a rail and are the edge tracks, where `Vbot` may pick up `M0bot` (section 6, rule 1). T2 and T5 are the center tracks of the two rows.
+- **Contacts across the middle rail:** an S/D contact may run from one row into the other, over the middle rail, to join the S/D of both rows in one column (paper text, Figure 11). Wherever it reaches a channel span it must cover the whole span.
+- **`POLYCUT` between the rows:** 10 nm high like the edge cuts, centered on the row boundary (assumed). Draw PO1 as one line from y 0 to 126 and add the cut only where the two rows need separate gates (regular cut); leave it out where one gate drives both rows (irregular cut, paper Figures 11 and 12). A cut splits the gate only if it crosses the full 14 nm gate width.
+- **Power:** label both VSS rails `VSS`. LVS joins nets with the same `VDD` or `VSS` label, because the two VSS rails are connected only outside the cell.
+- **Netlist:** LVS compares the cell with `netlists/<cell>_3t2h.cir`.
 
 ## 8. Changing assumed values and open decisions
 
