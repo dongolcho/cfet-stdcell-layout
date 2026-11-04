@@ -285,6 +285,7 @@ A triple-height cell stacks three 3T rows (paper Figure 14). The lower row is a 
 - **Tracks:** T1, T3, T4, T6, T7 and T9 lie over a rail and are the edge tracks. T2, T5 and T8 are the center tracks of the three rows.
 - **`POLYCUT` between the rows:** as in the double-height cell, draw PO1 from y 0 to 189 and cut it at a row boundary only where the rows on its two sides need separate gates. The paper's XNOR leaves some gates uncut over two rows, so that one poly line spans 6 MINT tracks (paper text).
 - **Power:** label both VSS rails `VSS` and both VDD rails `VDD`.
+- **A gate through a row where it drives nothing:** an uncut gate still forms a pFET and an nFET in every row it crosses over `FININTENT`. Where those transistors are not part of the circuit, tie both S/D of the pFET to one net and both S/D of the nFET to one net. LVS ignores a transistor whose source and drain are on one net and prints how many it ignored; any other extra transistor is a difference from the schematic.
 - **Netlist:** LVS compares the cell with `netlists/<cell>_3t3h.cir`.
 
 ## 8. Changing assumed values and open decisions

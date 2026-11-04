@@ -120,6 +120,25 @@ connect_implicit("VSS")
 
 schematic(schematic_path, RBA::NetlistSpiceReader::new(Mos3SpiceReader::new))
 
+# A gate that runs on through a row where it drives nothing (a gate spanning several rows of a
+# multi-height cell) still forms a pFET and an nFET there. With both S/D of such a transistor on one
+# net it carries no current, so remove it before comparing, as foundry LVS filters shorted devices.
+shorted_count = 0
+netlist.each_circuit do |circuit|
+  shorted = []
+  circuit.each_device do |device|
+    source = device.net_for_terminal("S")
+    drain = device.net_for_terminal("D")
+    shorted << device if source && drain && source.cluster_id == drain.cluster_id
+  end
+  shorted.each { |device| circuit.remove_device(device) }
+  shorted_count += shorted.size
+end
+if shorted_count > 0
+  puts("Info: ignored #{shorted_count} #{shorted_count == 1 ? 'transistor' : 'transistors'} in '#{$input}' " \
+       "whose source and drain are on one net; they carry no current and are not compared with the schematic.")
+end
+
 netlist.simplify
 schematic.simplify
 align
