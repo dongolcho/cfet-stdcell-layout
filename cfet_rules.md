@@ -249,6 +249,45 @@ A double-height cell stacks two 3T rows (paper Figure 11). The upper row is the 
 - **Power:** label both VSS rails `VSS`. LVS joins nets with the same `VDD` or `VSS` label, because the two VSS rails are connected only outside the cell.
 - **Netlist:** LVS compares the cell with `netlists/<cell>_3t2h.cir`.
 
+### Triple-height 3T (189 nm)
+
+A triple-height cell stacks three 3T rows (paper Figure 14). The lower row is a single-height 3T row, the middle row is mirrored about y = 63 as in the double-height cell, and the upper row repeats the lower row shifted up by 126 nm.
+
+| Item | y start (nm) | y end (nm) | Basis |
+|---|---:|---:|---|
+| Cell boundary | 0 | 189 | derived |
+| BPR, VSS (South) | -16 | 16 | derived |
+| BPR, VDD | 47 | 79 | derived |
+| BPR, VSS | 110 | 142 | derived |
+| BPR, VDD (North) | 173 | 205 | derived |
+| MINT T1 (North) | 173 | 184 | derived |
+| MINT T2 | 152 | 163 | derived |
+| MINT T3 | 131 | 142 | derived |
+| MINT T4 | 110 | 121 | derived |
+| MINT T5 | 89 | 100 | derived |
+| MINT T6 | 68 | 79 | derived |
+| MINT T7 | 47 | 58 | derived |
+| MINT T8 | 26 | 37 | derived |
+| MINT T9 (South) | 5 | 16 | derived |
+| Channel, upper row | 155 | 160 | derived |
+| Channel, middle row | 92 | 97 | derived |
+| Channel, lower row | 29 | 34 | derived |
+| Channel span, upper row | 152 | 163 | derived |
+| Channel span, middle row | 89 | 100 | derived |
+| Channel span, lower row | 26 | 37 | derived |
+| Gate and dummy poly | 0 | 189 | derived |
+| S/D contact escape limits | 5 | 184 | derived |
+| `POLYCUT` between the lower and middle rows | 58 | 68 | assumed |
+| `POLYCUT` between the middle and upper rows | 121 | 131 | assumed |
+| `POLYCUT`, North | 184 | 194 | assumed |
+
+- **Rail order:** VSS, VDD, VSS, VDD from the bottom, as labeled in Figure 14 (paper text).
+- **Tracks:** T1, T3, T4, T6, T7 and T9 lie over a rail and are the edge tracks. T2, T5 and T8 are the center tracks of the three rows.
+- **`POLYCUT` between the rows:** as in the double-height cell, draw PO1 from y 0 to 189 and cut it at a row boundary only where the rows on its two sides need separate gates. The paper's XNOR leaves some gates uncut over two rows, so that one poly line spans 6 MINT tracks (paper text).
+- **Power:** label both VSS rails `VSS` and both VDD rails `VDD`.
+- **A gate through a row where it drives nothing:** an uncut gate still forms a pFET and an nFET in every row it crosses over `FININTENT`. Where those transistors are not part of the circuit, tie both S/D of the pFET to one net and both S/D of the nFET to one net. LVS ignores a transistor whose source and drain are on one net and prints how many it ignored; any other extra transistor is a difference from the schematic.
+- **Netlist:** LVS compares the cell with `netlists/<cell>_3t3h.cir`.
+
 ## 8. Changing assumed values and open decisions
 
 Changing an assumed value changes other values with it:

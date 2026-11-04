@@ -7,4 +7,22 @@
  <layer-properties_file>cfet.lyp</layer-properties_file>
  <add-other-layers>true</add-other-layers>
  <default-grids>0.001,0.005,0.021,0.042</default-grids>
+ <!-- Net Tracer (Tools > Trace Net). Each connection is "layer, via, layer"; GATE is PO1 minus
+      POLYCUT, as in the LVS deck. FININTENT is left out: it holds both tiers in one shape, so
+      tracing through it would join pFET and nFET S/D. S/D that only a channel joins are not traced. -->
+ <connectivity>
+  <stack>
+   <name>cfet</name>
+   <description>Contacts, vias, MINT, M1 and gates</description>
+   <connection>20/0,40/0,50/0</connection>
+   <connection>21/0,41/0,50/0</connection>
+   <connection>20/0,22/0,21/0</connection>
+   <connection>GATE,42/0,50/0</connection>
+   <connection>20/0,30/0,1/0</connection>
+   <connection>21/0,31/0,1/0</connection>
+   <connection>50/0,60/0,61/0</connection>
+   <connection>GATE,62/0,61/0</connection>
+   <symbols>GATE='10/0-12/0'</symbols>
+  </stack>
+ </connectivity>
 </technology>

@@ -4,8 +4,9 @@
 #   klayout_app.exe -b -r cfet.lvs -rd input=<layout.gds> -rd report=<report.lvsdb>
 #                   (-rd netlists=<folder> | -rd schematic=<netlist.cir>) [-rd cell=<top cell>]
 #
-# With netlists=<folder>, the schematic is <folder>/<cell>_4t.cir, <cell>_3t.cir or <cell>_3t2h.cir,
-# chosen by the prBoundary height (84 nm for 4T, 63 nm for 3T, 126 nm for double-height 3T).
+# With netlists=<folder>, the schematic is <folder>/<cell>_4t.cir, <cell>_3t.cir, <cell>_3t2h.cir or
+# <cell>_3t3h.cir, chosen by the prBoundary height (84 nm for 4T, 63 nm for 3T, 126 nm for
+# double-height 3T, 189 nm for triple-height 3T).
 #
 # Device model: every gate column holds one pFET in the bottom tier and one nFET in the top tier.
 # Both tiers share the FININTENT and PO1 shapes, so each tier gets its own copy of the channel
@@ -63,7 +64,7 @@ bpr_text   = labels(1, 0)
 boundary   = input(100, 0)
 
 # ---- schematic netlist: given directly, or chosen by the cell height ----
-NETLIST_SUFFIX_BY_HEIGHT = { 84 => "4t", 63 => "3t", 126 => "3t2h" }
+NETLIST_SUFFIX_BY_HEIGHT = { 84 => "4t", 63 => "3t", 126 => "3t2h", 189 => "3t3h" }
 schematic_path = $schematic
 if !schematic_path
   if !$netlists
@@ -75,7 +76,7 @@ if !schematic_path
   height_nm = (boundary.data.bbox.height * dbu * 1000).round
   suffix = NETLIST_SUFFIX_BY_HEIGHT[height_nm]
   if !suffix
-    raise "Error: invalid prBoundary height #{height_nm} nm in '#{$input}'. No schematic is assigned to this height; LVS was not run. Draw prBoundary 84 nm high (4T), 63 nm high (3T) or 126 nm high (double-height 3T)."
+    raise "Error: invalid prBoundary height #{height_nm} nm in '#{$input}'. No schematic is assigned to this height; LVS was not run. Draw prBoundary 84 nm high (4T), 63 nm high (3T), 126 nm high (double-height 3T) or 189 nm high (triple-height 3T)."
   end
   schematic_path = File.join($netlists, "#{source.cell_name}_#{suffix}.cir")
 end
@@ -118,6 +119,25 @@ connect_implicit("VDD")
 connect_implicit("VSS")
 
 schematic(schematic_path, RBA::NetlistSpiceReader::new(Mos3SpiceReader::new))
+
+# A gate that runs on through a row where it drives nothing (a gate spanning several rows of a
+# multi-height cell) still forms a pFET and an nFET there. With both S/D of such a transistor on one
+# net it carries no current, so remove it before comparing, as foundry LVS filters shorted devices.
+shorted_count = 0
+netlist.each_circuit do |circuit|
+  shorted = []
+  circuit.each_device do |device|
+    source = device.net_for_terminal("S")
+    drain = device.net_for_terminal("D")
+    shorted << device if source && drain && source.cluster_id == drain.cluster_id
+  end
+  shorted.each { |device| circuit.remove_device(device) }
+  shorted_count += shorted.size
+end
+if shorted_count > 0
+  puts("Info: ignored #{shorted_count} #{shorted_count == 1 ? 'transistor' : 'transistors'} in '#{$input}' " \
+       "whose source and drain are on one net; they carry no current and are not compared with the schematic.")
+end
 
 netlist.simplify
 schematic.simplify
