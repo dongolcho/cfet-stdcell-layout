@@ -4,12 +4,13 @@
 #   klayout_app.exe -b -r cfet.lvs -rd input=<layout.gds> -rd report=<report.lvsdb>
 #                   (-rd netlists=<folder> | -rd schematic=<netlist.cir>) [-rd cell=<top cell>]
 #
-# With netlists=<folder>, the schematic is <folder>/<cell>_4t.cir or <cell>_3t.cir,
-# chosen by the prBoundary height (84 nm for 4T, 63 nm for 3T).
+# With netlists=<folder>, the schematic is <folder>/<cell>_4t.cir, <cell>_3t.cir or <cell>_3t2h.cir,
+# chosen by the prBoundary height (84 nm for 4T, 63 nm for 3T, 126 nm for double-height 3T).
 #
 # Device model: every gate column holds one pFET in the bottom tier and one nFET in the top tier.
 # Both tiers share the FININTENT and PO1 shapes, so each tier gets its own copy of the channel
 # layers; the bottom copy connects only to M0bot and the top copy only to M0top.
+# POLYCUT splits a PO1 line into separate gates.
 # Layout pins are texts on MINTINTENT or M1 (signals) and on MBURINTENT (VDD, VSS).
 
 source($input, $cell)
@@ -41,7 +42,9 @@ end
 
 bpr        = input(1, 0)
 fin        = input(2, 0)
-gate       = input(10, 0)
+polycut    = input(12, 0)
+# A PO1 line is one gate net only between its POLYCUTs.
+gate       = input(10, 0) - polycut
 m0bot      = input(20, 0)
 m0top      = input(21, 0)
 m0merge    = input(22, 0)
@@ -60,7 +63,7 @@ bpr_text   = labels(1, 0)
 boundary   = input(100, 0)
 
 # ---- schematic netlist: given directly, or chosen by the cell height ----
-NETLIST_SUFFIX_BY_HEIGHT = { 84 => "4t", 63 => "3t" }
+NETLIST_SUFFIX_BY_HEIGHT = { 84 => "4t", 63 => "3t", 126 => "3t2h" }
 schematic_path = $schematic
 if !schematic_path
   if !$netlists
@@ -72,7 +75,7 @@ if !schematic_path
   height_nm = (boundary.data.bbox.height * dbu * 1000).round
   suffix = NETLIST_SUFFIX_BY_HEIGHT[height_nm]
   if !suffix
-    raise "Error: invalid prBoundary height #{height_nm} nm in '#{$input}'. No schematic is assigned to this height; LVS was not run. Draw prBoundary 84 nm high (4T) or 63 nm high (3T)."
+    raise "Error: invalid prBoundary height #{height_nm} nm in '#{$input}'. No schematic is assigned to this height; LVS was not run. Draw prBoundary 84 nm high (4T), 63 nm high (3T) or 126 nm high (double-height 3T)."
   end
   schematic_path = File.join($netlists, "#{source.cell_name}_#{suffix}.cir")
 end
@@ -110,6 +113,9 @@ connect(supervia, m1)
 connect(mint, mint_text)
 connect(m1, m1_text)
 connect(bpr, bpr_text)
+# A double-height cell has a VSS rail at its top and bottom edges, joined outside the cell.
+connect_implicit("VDD")
+connect_implicit("VSS")
 
 schematic(schematic_path, RBA::NetlistSpiceReader::new(Mos3SpiceReader::new))
 
