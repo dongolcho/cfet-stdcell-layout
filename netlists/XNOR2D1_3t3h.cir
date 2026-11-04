@@ -1,0 +1,20 @@
+* XNOR2D1: ZN = !(A1 ^ A2), CFET triple-height 3T (Sherazi et al., SPIE 2019, Figures 13 and 14)
+* Three inverters make A1B = !A1, A2B = !A2 and A2BB = !A2B; two transmission gates pass
+* A2BB to ZN when A1 = 1 and A2B to ZN when A1 = 0.
+* Each transistor is one 3T device: one nanosheet, W = 5 nm, L = 14 nm.
+* Element order: M<name> drain gate source bulk model
+.SUBCKT XNOR2D1 A1 A2 ZN VDD VSS
+* inverters
+MPI1 A1B  A1  VDD VDD PMOS L=14n W=5n
+MNI1 A1B  A1  VSS VSS NMOS L=14n W=5n
+MPI2 A2B  A2  VDD VDD PMOS L=14n W=5n
+MNI2 A2B  A2  VSS VSS NMOS L=14n W=5n
+MPI3 A2BB A2B VDD VDD PMOS L=14n W=5n
+MNI3 A2BB A2B VSS VSS NMOS L=14n W=5n
+* transmission gate 1: on when A1 = 1
+MNT1 ZN A1  A2BB VSS NMOS L=14n W=5n
+MPT1 ZN A1B A2BB VDD PMOS L=14n W=5n
+* transmission gate 2: on when A1 = 0
+MNT2 ZN A1B A2B  VSS NMOS L=14n W=5n
+MPT2 ZN A1  A2B  VDD PMOS L=14n W=5n
+.ENDS
