@@ -10,6 +10,7 @@
 # Device model: every gate column holds one pFET in the bottom tier and one nFET in the top tier.
 # Both tiers share the FININTENT and PO1 shapes, so each tier gets its own copy of the channel
 # layers; the bottom copy connects only to M0bot and the top copy only to M0top.
+# POLYCUT splits a PO1 line into separate gates.
 # Layout pins are texts on MINTINTENT or M1 (signals) and on MBURINTENT (VDD, VSS).
 
 source($input, $cell)
@@ -41,7 +42,9 @@ end
 
 bpr        = input(1, 0)
 fin        = input(2, 0)
-gate       = input(10, 0)
+polycut    = input(12, 0)
+# A PO1 line is one gate net only between its POLYCUTs.
+gate       = input(10, 0) - polycut
 m0bot      = input(20, 0)
 m0top      = input(21, 0)
 m0merge    = input(22, 0)
